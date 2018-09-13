@@ -1,83 +1,94 @@
 package com.malik;
 
+
 import javax.websocket.*;
 import javax.websocket.CloseReason.CloseCodes;
+import javax.websocket.server.PathParam;
 import javax.websocket.server.ServerEndpoint;
 import java.io.IOException;
 
-@ServerEndpoint(value="/chat")
+
+@ServerEndpoint(value="/chat/{connT}")
 public class websocketChatServer {
 
-    private static Session client1, client2;
+
+    // Deprecated in v1.0??
     private static int countSessions = 0;
 
     @OnOpen
-    public void onOpen(Session session){
+    public void onOpen(@PathParam("connT") String connType, Session session){
         System.out.println("Connected:...." + session.getId());
+            switch (connType.trim()) {
+                case "quit":
+                    try {
+                        session.close(new CloseReason(CloseCodes.NORMAL_CLOSURE, "Chat Finished!!"));
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                    break;
+                case "USER":
+                    // 1. Add the new user looking for agent help to a temporary priority queue.
+                    chatController.addToTempChatUserList(session);
+                    sendReturnMessage(session, "Please Wait While We Connect You To Our Customer Service Representative!! Thanks");
+
+                    // 2. Send SOS to (Competella's) agent pool.
+                    // sendMessageToCompetella
+                    // this may actually be something like :
+                    // ---
+                    // client.connectToServer(webSocketClient.class, new URI("ws://<COMPETELLA_INTERFACE_ADDRESS>/??/??"));
+                    // ---
+                    // What follows is that the webSocketClient may be used with little modification for this server to start
+                    // acting like a client to the agent from competella. Technically it means that the OnOpen, OnMessage and
+                    // OnClose methods of the websocketClient would be used under the umbrella of information stored in
+                    // chatController datastructures, to connect USER and AGENT connections and carryout chat.
+                    break;
+
+                case "AGENT":
+                    chatController.addToAgentChatMaps(session, chatController.removeFromTempChatUserList());
+                    sendChatMessage(session, "You are now connected to our Representative!!\n Hi, How can I help you!!");
+                    break;
+
+            }
     }
 
     @OnMessage
-    public String onMessage(String message, Session session){
-        switch (message) {
-            case "quit":
-                try {
-                    session.close(new CloseReason(CloseCodes.NORMAL_CLOSURE, "Chat Finished!!"));
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-                break;
-        }
-
-        // Save sessions for later use
-        if(countSessions == 0) {
-            client1 = session;
-            countSessions += 1;
-        }
-        else if(countSessions == 1){
-            client2 = session;
-            countSessions += 1;
-
-        }
-
-        if(message.contains("SENDIT:")){
-            if(session.getId().toString().equals(client1.getId().toString())) {
-                sendMessage(client2, message);
-                System.out.println("CHECK1: Message from Client:...." + session.getId() + "...and...."+ client2.getId()+"....is....." + message);
-                return (new String("The server forwarded your message: " + message + " to session: " + client2.getId()));
-            }
-            else if(session.getId().toString().equals(client2.getId().toString())){
-                sendMessage(client1, message);
-                System.out.println("CHECK2: Message from Client:...." + session.getId() + "  and...."+ client1.getId()+ "....is....." + message);
-                return (new String("The server forwarded your message: " + message + " to session: " + client1.getId()));
-            }
-            else
-            {
-                System.out.println("CHECKERROR");
-                return null;
-            }
-        }
-
-
-        System.out.println("Message from Client:...." + session.getId() + "....is....." + message);
-        System.out.println("+++++++++++++++++++++++++++++++++++++++++++++++++++");
-        return (new String("The server returns your message: " + message + " from session: " + session.getId()));
+    public void onMessage( String message, Session session){
+        sendChatMessage(session, message);
+        return;
     }
 
 
     @OnClose
     public void onClose(Session session, CloseReason closeReason){
         System.out.println("Session:...."+session.getId()+"....is closing down because of ....."+closeReason.toString());
+        sendChatMessage(session,closeReason.toString());
+        closePartnerSession(session);
+        chatController.cleanUpAgentChatMap(session);
     }
 
-
-
-
-    public void sendMessage(Session session, String message){
-
-        if(session.isOpen()) {
-            System.out.println("sendMessage(): Message out to  Client:...." + session.getId() + "....is....." + message);
-            session.getAsyncRemote().sendText(message);
+    void closePartnerSession(Session session){
+        Session session2SendTo = chatController.findPartnerChatSession(session);
+        try {
+            session2SendTo.close();
+        }catch (IOException e)
+        {
+            throw new RuntimeException(e);
         }
+    }
+
+    public void sendChatMessage(Session session, String message){
+
+        Session session2SendTo = chatController.findPartnerChatSession(session);
+        if(session2SendTo.isOpen()) {
+            // If the message is part of a chat session that this server needs to route correctly to the respective partner.
+            System.out.println("sendMessage(): Message out to  Chat Partner:...." + session2SendTo.getId() + "....is....." + message);
+            // Just Send It!
+            session2SendTo.getAsyncRemote().sendText(message);
+        }
+    }
+
+    public void sendReturnMessage(Session session, String message){
+             session.getAsyncRemote().sendText(message);
     }
 
 }
