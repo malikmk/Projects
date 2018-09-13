@@ -31,14 +31,14 @@ public class websocketChatServer {
                     chatController.addToTempChatUserList(session);
                     sendReturnMessage(session, "Please Wait While We Connect You To Our Customer Service Representative!! Thanks");
 
-                    // 2. Send SOS to (Competella's) agent pool.
-                    // sendMessageToCompetella
+                    // 2. Send SOS to  agent pool.
+                    // sendMessageToAgentPool
                     // this may actually be something like :
                     // ---
-                    // client.connectToServer(webSocketClient.class, new URI("ws://<COMPETELLA_INTERFACE_ADDRESS>/??/??"));
+                    // client.connectToServer(webSocketClient.class, new URI("ws://<AGENTPOOL_ADDRESS>/??/??"));
                     // ---
                     // What follows is that the webSocketClient may be used with little modification for this server to start
-                    // acting like a client to the agent from competella. Technically it means that the OnOpen, OnMessage and
+                    // acting like a client to the agent from pool. Technically it means that the OnOpen, OnMessage and
                     // OnClose methods of the websocketClient would be used under the umbrella of information stored in
                     // chatController datastructures, to connect USER and AGENT connections and carryout chat.
                     break;
